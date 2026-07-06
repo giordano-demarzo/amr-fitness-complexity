@@ -264,7 +264,12 @@ for p in Rh.index:
         forecasts[p] = cand[:8]
 
 # ---- pathogen index --------------------------------------------------------
-n_resist_now = {s: sum(1 for a in first_lit.get(s, {})) for s in first_lit}
+# Only drugs that are actually nodes in the co-resistance network count here: a few
+# antibiotics (Ertapenem, Tetracycline, Quinupristin-dalfopristin) were tested only in
+# 2012-2014 and so are absent from the 2015-2024 network window, even though a pathogen's
+# full-history RCA can flag them. Restricting to LAYOUT keeps the "(network)" count and the
+# lit-up nodes in sync with what is drawn.
+n_resist_now = {s: sum(1 for a in first_lit.get(s, {}) if a in LAYOUT) for s in first_lit}
 fit_pct = Fz.rank(pct=True) * 100  # in-block fitness percentile (the meaningful axis)
 pathogens = []
 detail = {}
@@ -292,7 +297,7 @@ for s in sorted(df.Species.unique()):
     ))
     detail[s] = dict(
         timeline={a: v for a, v in tl.items()},
-        lit={ab_index[a]: y for a, y in lit.items()},
+        lit={ab_index[a]: y for a, y in lit.items() if a in LAYOUT},
         forecast=fc,
     )
 

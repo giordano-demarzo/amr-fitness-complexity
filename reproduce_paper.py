@@ -390,18 +390,28 @@ def stage_figures(S, C, hub):
     # ---- FIGURE 4 -------------------------------------------------------------
     te = C.copy()
     hb10 = hub.reset_index().sort_values("AUC", ascending=False).head(10)
-    W = cooc_cols(M); G = nx.from_pandas_adjacency(W)
+    # For display, normalise the co-occurrence by drug degree (cosine): raw counts span
+    # 5..500+, which collapses the force layout onto a few hubs and makes degree-scaled node
+    # sizes explode. This affects only the drawing; the forecast uses raw co-occurrence.
+    W = cooc_cols(M)
+    kdeg = M.sum(0).reindex(W.columns).to_numpy(float)
+    den = np.sqrt(np.outer(kdeg, kdeg)); den[den == 0] = 1.0
+    Wn = pd.DataFrame(W.to_numpy() / den, index=W.index, columns=W.columns)
+    np.fill_diagonal(Wn.values, 0.0)
+    G = nx.from_pandas_adjacency(Wn)
     G.remove_edges_from([(u, v) for u, v, d in G.edges(data=True) if d["weight"] <= 0])
-    posl = nx.spring_layout(G, weight="weight", seed=1, k=0.7)
+    posl = nx.spring_layout(G, weight="weight", seed=1, k=1.1, iterations=300)
     fig, ax = plt.subplots(2, 2, figsize=(13.5, 11))
-    ncol = [colA.get(AWARE.get(n, 2), "#cccccc") for n in G.nodes()]; deg = dict(G.degree(weight="weight"))
+    ncol = [colA.get(AWARE.get(n, 2), "#cccccc") for n in G.nodes()]
+    deg = dict(G.degree(weight="weight")); mxd = max(deg.values()) or 1.0
     nx.draw_networkx_edges(G, posl, ax=ax[0, 0], alpha=0.15, width=1)
-    nx.draw_networkx_nodes(G, posl, ax=ax[0, 0], node_color=ncol, node_size=[80 + deg[n] * 260 for n in G.nodes()],
+    nx.draw_networkx_nodes(G, posl, ax=ax[0, 0], node_color=ncol,
+        node_size=[60 + 520 * (deg[n] / mxd) for n in G.nodes()],
         edgecolors="k", linewidths=0.4)
     nx.draw_networkx_labels(G, posl, ax=ax[0, 0], font_size=6.2)
     ax[0, 0].set_title("(a) Antibiotic co-resistance network (colored by AWaRe)"); ax[0, 0].axis("off")
     ax[0, 0].legend(handles=[Line2D([0], [0], marker='o', color='w', markerfacecolor=colA[l], markersize=9, label=n)
-        for l, n in [(1, "Access"), (2, "Watch"), (3, "Reserve")]], loc="upper left", frameon=False)
+        for l, n in [(1, "Access"), (2, "Watch"), (3, "Reserve")]], loc="lower right", frameon=False)
     for col, c, lab in [("rho_abx", "#c9184a", "antibiotic-net"), ("rho_path", "#0077b6", "pathogen-net")]:
         t = te.copy(); t["b"] = pd.qcut(t[col].rank(method="first"), 6, labels=False)
         g = t.groupby("b").agg(x=(col, "mean"), p=("label", "mean"))

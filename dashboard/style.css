@@ -134,12 +134,15 @@ h1{font-size:21px;white-space:nowrap;background:linear-gradient(90deg,#fff,#9fe3
 .node{cursor:pointer;transition:opacity .5s}
 .node circle.core{transition:fill .6s,r .3s,stroke .3s}
 .node circle.halo{transition:opacity .6s,r .6s;pointer-events:none}
-.node text{font-size:10px;fill:var(--mut);pointer-events:none;transition:fill .4s,opacity .4s;
+.node text{font-size:9.5px;fill:var(--mut);pointer-events:none;transition:fill .4s,opacity .4s;
   paint-order:stroke;stroke:#0a1018;stroke-width:2.6px}
+.node text.lbl-off{opacity:0}
 .node.dim{opacity:.28}
 .node.dim text{opacity:.35}
+.node.dim text.lbl-off{opacity:0}
 .node.sel circle.core{stroke:#fff;stroke-width:2.2px}
 .node.lit text{fill:#ffd9c9;opacity:1}
+.node:hover text{opacity:1!important;fill:#e8f0f8}
 
 /* ---------- time controls ---------- */
 .timeplay{display:flex;align-items:center;gap:14px;padding:10px 6px 4px;margin-top:2px}

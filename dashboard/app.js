@@ -206,6 +206,7 @@ function buildNetwork() {
 
   // nodes
   const ng = el('g');
+  const built = [];
   innet.forEach(({ a, i }) => {
     const cx = X(a.x), cy = Y(a.y), r = R(a.degree);
     const halo = el('circle', { class: 'halo', cx, cy, r: r + 4, fill: '#ff3b2e', opacity: 0, filter: 'url(#glow)' });
@@ -217,7 +218,19 @@ function buildNetwork() {
     g.addEventListener('mouseleave', hideTip);
     g.addEventListener('click', ev => { ev.stopPropagation(); openAbxModal(i); });
     ng.appendChild(g);
-    NODES[i] = { g, core, halo, a, cx, cy, r };
+    NODES[i] = { g, core, halo, a, cx, cy, r, label };
+    built.push({ i, a, cx, cy, r, label });
+  });
+  // greedy label thinning: label the most-connected drugs first, drop any label whose
+  // box would overlap one already kept. Dropped labels reappear on hover / when lit.
+  const placed = [];
+  built.sort((p, q) => (q.a.degree || 0) - (p.a.degree || 0));
+  built.forEach(b => {
+    const w = b.a.name.length * 5.9 + 6, h = 15;
+    const box = { x: b.cx - w / 2, y: b.cy - b.r - 18, w, h };
+    const hit = placed.some(o => box.x < o.x + o.w && box.x + box.w > o.x && box.y < o.y + o.h && box.y + box.h > o.y);
+    if (hit) b.label.classList.add('lbl-off');
+    else placed.push(box);
   });
   VP.appendChild(ng);
 

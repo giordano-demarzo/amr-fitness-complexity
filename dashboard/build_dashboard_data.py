@@ -99,8 +99,16 @@ Mfull = Mfull.loc[Mfull.sum(1) > 0, Mfull.sum(0) > 0]
 Mv = Mfull.to_numpy(float)
 sp_net = np.array(Mfull.index); ab_net = np.array(Mfull.columns)
 
-# co-resistance weights + fitness/complexity on the pooled structural matrix
-Waa = cooc_cols(Mfull)
+# Raw co-occurrence counts drive the FORECAST (see below), but their range (5..500+)
+# collapses a force layout into a hub-dominated clump. For *display only* we position
+# and connect nodes with the degree-normalised co-occurrence (cosine similarity), which
+# spreads the drugs evenly and exposes the co-resistance clusters. The edges shown are
+# therefore the strongest co-occurrence relationships, controlled for how common each drug is.
+Craw = cooc_cols(Mfull).to_numpy()
+kdeg = Mfull.sum(0).reindex(ab_net).to_numpy()            # # species resistant to each drug
+den = np.sqrt(np.outer(kdeg, kdeg)); den[den == 0] = 1.0
+Wviz = Craw / den; np.fill_diagonal(Wviz, 0.0)
+Waa = pd.DataFrame(Wviz, index=ab_net, columns=ab_net)    # cosine-normalised, for layout+edges
 Fg, Qg = efc(Mv)
 Fglob = pd.Series(Fg, index=sp_net)
 Qglob = pd.Series(Qg, index=ab_net)
@@ -122,10 +130,32 @@ for b in range(5):
 import networkx as nx
 G = nx.from_pandas_adjacency(Waa)
 G.remove_edges_from([(u, v) for u, v, d in G.edges(data=True) if d["weight"] <= 0])
-pos = nx.spring_layout(G, weight="weight", seed=1, k=0.9, iterations=200)
-# normalise layout into [0,1]
+pos = nx.spring_layout(G, weight="weight", seed=1, k=1.7, iterations=500)
+deg = dict(G.degree(weight="weight"))
 xs = np.array([pos[n][0] for n in ab_net]); ys = np.array([pos[n][1] for n in ab_net])
 xs = (xs - xs.min()) / (xs.ptp() or 1); ys = (ys - ys.min()) / (ys.ptp() or 1)
+
+# collision relaxation in the same pixel frame the front-end uses (W=1000,H=700,pad=40,
+# radius = 6 + sqrt(deg/max)*12): the spring keeps strongly-linked drugs on top of one
+# another, so nudge overlapping disks apart until each has a little breathing room.
+Wpx, Hpx, pad = 1000.0, 700.0, 40.0
+mx = max(deg.values()) or 1.0
+rad = np.array([6.0 + np.sqrt(deg.get(n, 0.0) / mx) * 12.0 for n in ab_net])
+px = pad + xs * (Wpx - 2 * pad); py = pad + (1 - ys) * (Hpx - 2 * pad)
+for _ in range(250):
+    moved = False
+    for i in range(len(ab_net)):
+        for j in range(i + 1, len(ab_net)):
+            dx = px[j] - px[i]; dy = py[j] - py[i]; dist = float(np.hypot(dx, dy))
+            if dist < 1e-6: dx, dy, dist = 0.9, 0.3, 0.95
+            need = rad[i] + rad[j] + 15.0
+            if dist < need:
+                sh = (need - dist) / 2.0; ux, uy = dx / dist, dy / dist
+                px[i] -= ux * sh; py[i] -= uy * sh; px[j] += ux * sh; py[j] += uy * sh
+                moved = True
+    if not moved: break
+px = np.clip(px, pad, Wpx - pad); py = np.clip(py, pad, Hpx - pad)
+xs = (px - pad) / (Wpx - 2 * pad); ys = 1 - (py - pad) / (Hpx - 2 * pad)
 LAYOUT = {n: (float(xs[i]), float(ys[i])) for i, n in enumerate(ab_net)}
 
 # ---- per-antibiotic predictive AUC (contagion predictability) --------------

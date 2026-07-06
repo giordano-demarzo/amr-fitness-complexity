@@ -23,7 +23,7 @@ data/reference/            # external reference labels (with provenance)
 results/
   temporal_diagnostics/
     pathogen_year_antibiotic_summary_minN_30.csv   # ← THE INPUT (see below)
-  nbi_projection/          # generated outputs (committed for convenience)
+  analysis/                # generated outputs (committed for convenience)
     clean_prediction.csv                 # Fig 4 rolling-origin candidates
     contagion_hubs.csv                   # Fig 4 per-antibiotic AUC
     nestedness_stats.csv                 # Fig 2 observed vs null nestedness
@@ -81,8 +81,8 @@ latexmk -pdf amr_complexity.tex
 
 ## Pipeline stages (inside `reproduce_paper.py`)
 
-1. **Prediction** — leakage-free rolling-origin back-test of the network-exposure
-   score → `clean_prediction.csv`, `contagion_hubs.csv` (Fig 4).
+1. **Prediction** — leakage-free rolling-origin back-test of the co-resistance
+   exposure score → `clean_prediction.csv`, `contagion_hubs.csv` (Fig 4).
 2. **Structure** — RCA binarization, spectral co-clustering, observed vs
    degree-preserving-null nestedness → `nestedness_stats.csv` (Figs 1, 2).
 3. **Validation** — Fitness–Complexity within blocks vs WHO AWaRe / ESKAPEE →

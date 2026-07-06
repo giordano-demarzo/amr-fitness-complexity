@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Resistome Atlas — Antimicrobial Resistance through Economic Complexity</title>
+<meta name="description" content="Interactive atlas of antimicrobial resistance: explore how pathogens acquire drug resistance across a co-resistance network, and forecast which drugs each pathogen is likely to defeat next.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ HEADER (title + inline stats + about button) ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 40 40"><g fill="none" stroke-width="2">
+          <circle cx="20" cy="20" r="4" class="lg-core"/>
+          <circle cx="8" cy="10" r="2.5"/><circle cx="33" cy="12" r="2.5"/>
+          <circle cx="10" cy="31" r="2.5"/><circle cx="31" cy="30" r="2.5"/>
+          <line x1="20" y1="20" x2="8" y2="10"/><line x1="20" y1="20" x2="33" y2="12"/>
+          <line x1="20" y1="20" x2="10" y2="31"/><line x1="20" y1="20" x2="31" y2="30"/>
+        </g></svg>
+      </div>
+      <div>
+        <h1>The Resistome Atlas</h1>
+        <p class="tagline">Antimicrobial resistance through Economic Complexity</p>
+      </div>
+    </div>
+    <div class="headright">
+      <div class="topstats" id="kpis"></div>
+      <button class="howbtn" id="openAbout">How it works</button>
+    </div>
+  </header>
+
+  <!-- ============ MAIN EXPLORER ============ -->
+  <section class="explorer">
+
+    <!-- LEFT: controls + pathogen card + forecast -->
+    <aside class="panel side">
+      <div class="search-wrap">
+        <label for="search">Choose a pathogen</label>
+        <input id="search" type="text" autocomplete="off" spellcheck="false"
+               placeholder="Search 394 species — e.g. Klebsiella…">
+        <div id="suggest" class="suggest"></div>
+      </div>
+      <div id="pathcard" class="pathcard empty"></div>
+      <div id="forecast" class="forecast"></div>
+    </aside>
+
+    <!-- RIGHT: network -->
+    <div class="panel netwrap">
+      <div class="net-head">
+        <div>
+          <h2 id="net-title">Antibiotic co&#8209;resistance network</h2>
+          <p id="net-sub" class="net-sub">Each node is an antibiotic; links join drugs that tend to fail together. Colour = WHO AWaRe tier.</p>
+        </div>
+        <div class="net-right">
+          <button id="deselect" class="deselect" hidden>✕&nbsp; Full network</button>
+          <div class="net-legend" id="net-legend"></div>
+        </div>
+      </div>
+
+      <div class="net-stage">
+        <svg id="net" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="tooltip" class="tooltip" hidden></div>
+        <div id="spreadbadge" class="spreadbadge" hidden></div>
+      </div>
+
+      <div class="timeplay" id="timeplay" hidden>
+        <button id="playbtn" class="playbtn" aria-label="Play resistance timeline">▶</button>
+        <input id="yearslider" type="range" min="0" max="20" value="20" step="1">
+        <div class="yearlabel"><span id="yearval">2024</span></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="foot-title">The Resistome Atlas</span>
+    <span class="foot-names">Alfredo De Bellis · Giordano De Marzo · Chiara Mastrogiuseppe</span>
+  </footer>
+</div>
+
+<!-- ============ INTRO MODAL (first visit) ============ -->
+<div id="introModal" class="modal-overlay" hidden>
+  <div class="modal-card intro-card" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <button class="modal-x" data-close aria-label="Close">✕</button>
+    <div class="intro-badge">Vivli AMR Surveillance Open Data Challenge</div>
+    <h2 id="introTitle">Resistance doesn't spread at random.</h2>
+    <p>When a bacterium learns to defeat one drug, it becomes far more likely to defeat
+    <em>related</em> drugs next. We mapped 20 years of global surveillance into a
+    <strong>co&#8209;resistance network</strong> — and used it to <strong>forecast each pathogen's next move</strong>.</p>
+    <p class="intro-cta-line">Pick a pathogen and watch its resistance ignite across the network, year by year.</p>
+    <div class="modal-actions">
+      <button class="btn-primary" data-close>Explore the atlas →</button>
+      <button class="btn-ghost" id="introAbout">How it works</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ABOUT / HOW-IT-WORKS MODAL ============ -->
+<div id="aboutModal" class="modal-overlay" hidden>
+  <div class="modal-card about-card" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <button class="modal-x" data-close aria-label="Close">✕</button>
+    <h2 id="aboutTitle">How the atlas works</h2>
+    <div class="method-grid">
+      <div class="mcard">
+        <div class="mnum">1</div>
+        <h3>Map the resistome</h3>
+        <p>We turn 20 years of Pfizer&nbsp;ATLAS / Vivli surveillance into a network of antibiotics that
+        <em>tend to fail together</em> across bacterial species, using tools built to study economic complexity.</p>
+      </div>
+      <div class="mcard">
+        <div class="mnum">2</div>
+        <h3>Resistance is contagious along the network</h3>
+        <p>A pathogen resistant to a drug's network neighbours is dramatically more likely to acquire that drug next.
+        In a leakage&#8209;free back&#8209;test (2020–2024) this network signal beats the naïve "how common is it" baseline
+        — reaching an AUC of <strong id="m-auc">0.87</strong> for the most predictable "contagion&#8209;hub" antibiotics.</p>
+      </div>
+      <div class="mcard">
+        <div class="mnum">3</div>
+        <h3>Fitness &amp; complexity that mean something</h3>
+        <p>Pathogen <em>fitness</em> and antibiotic <em>complexity</em> recover known biology: WHO&nbsp;priority ESKAPE
+        pathogens rank as fittest, and last&#8209;resort "Reserve" drugs rank as most complex
+        (ρ&nbsp;=&nbsp;<strong id="m-rho">0.59</strong>).</p>
+      </div>
+      <div class="mcard">
+        <div class="mnum">4</div>
+        <h3>Forecast the next move</h3>
+        <p>For every pathogen still susceptible to a drug, we score its network exposure and calibrate it into a
+        probability of acquiring resistance next — a watch&#8209;list for the drugs each bug is poised to defeat.</p>
+      </div>
+    </div>
+    <p class="disclaimer">Research prototype built from aggregated Pfizer&nbsp;ATLAS surveillance data (governed by the
+    Vivli data&#8209;use agreement); reference labels from the WHO&nbsp;AWaRe 2023 classification and the ESKAPEE priority
+    list. Forecasts are statistical signals from historical co&#8209;resistance patterns, <strong>not clinical guidance</strong>.</p>
+  </div>
+</div>
+
+<!-- ============ RESISTANCE TIMELINE MODAL ============ -->
+<div id="heatModal" class="modal-overlay" hidden>
+  <div class="modal-card heat-card" role="dialog" aria-modal="true">
+    <button class="modal-x" data-close aria-label="Close">✕</button>
+    <div class="heat-head">
+      <h2>Resistance timeline — <span id="heat-name"></span></h2>
+      <p>Share of tested samples found resistant, by year. Deeper red = more resistance. Grey = no surveillance that year.</p>
+    </div>
+    <div class="heat-scroll"><svg id="heat" preserveAspectRatio="xMinYMin meet"></svg></div>
+    <div class="heat-legend" id="heat-legend"></div>
+  </div>
+</div>
+
+<!-- ============ ANTIBIOTIC DETAIL MODAL ============ -->
+<div id="abxModal" class="modal-overlay" hidden>
+  <div class="modal-card abx-card" role="dialog" aria-modal="true">
+    <button class="modal-x" data-close aria-label="Close">✕</button>
+    <div id="abxBody"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

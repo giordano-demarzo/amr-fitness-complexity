@@ -40,7 +40,7 @@ organisms ($p<10^{-3}$), whereas the corresponding global scores fail (fitness v
 $\rho=-0.24$, mirroring the firm--product case). Finally, projecting the bipartite network onto
 either layer yields a resistance-relatedness network on which the emergence of new resistance is
 predictable out of sample: a parameter-free network-exposure score anticipates which susceptible
-pathogen--antibiotic pairs become resistant in a rolling-origin test over 2020--2024 (AUC $0.67$,
+pathogen--antibiotic pairs become resistant in a rolling-origin test over 2020--2024 (AUC $0.71$,
 $p<0.005$), while resistance prevalence and proximity-to-threshold carry no information after a
 comparative-advantage binarization. AMR is thus
 a modular, locally-nested ecosystem in which resistance spreads by predictable local contagion.
@@ -198,14 +198,14 @@ that could be quietly adjusted to flatter the result. This lets us test it in th
 way---strictly forward in time. For each year we build everything from the past only and predict the
 following year's new resistances, repeating this for every year from 2019 to 2023 (predicting
 2020--2024); each prediction concerns a future the model has never seen. The score works, and works
-consistently. Bugs in the most-exposed group are about \emph{four times} more likely to acquire the
-new resistance than those in the least-exposed group ($15\%$ vs.\ $3.6\%$; Fig.~\ref{fig:pred}b). Its
+consistently. Bugs in the most-exposed group are more than \emph{three times} more likely to acquire the
+new resistance than those in the least-exposed group ($17\%$ vs.\ $4.6\%$; Fig.~\ref{fig:pred}b). Its
 overall accuracy, measured as the probability of ranking a true future resistance above a non-event
-(the AUC), is $0.67$ for the drug network and $0.64$ for the analogous pathogen network (two species
-linked when they resist similar drugs), stable across every year tested ($0.63$--$0.77$ and
-$0.61$--$0.68$). To be sure this reflects the real wiring and not just how busy each node is, we
+(the AUC), is $0.71$ for the drug network and $0.63$ for the analogous pathogen network (two species
+linked when they resist similar drugs), stable across every year tested ($0.67$--$0.77$ and
+$0.59$--$0.69$). To be sure this reflects the real wiring and not just how busy each node is, we
 reshuffled the network labels \num{200} times: the true score stands far above this chance baseline
-($z=4.4$ and $8.0$, $p<0.01$).
+($z=6.2$ and $8.7$, $p<0.005$).
 
 The comparison that makes the point is with the obvious na\"ive guesses. Once resistance is measured
 by comparative advantage, simply betting on the currently most common resistances, or on the species
@@ -219,7 +219,7 @@ existing profile, and which are therefore the natural targets for early warning.
 \centering
 \includegraphics[width=\textwidth]{figures/fig4_prediction.pdf}
 \caption{\textbf{Prediction of resistance emergence from network exposure.}
-(a) Antibiotic co-resistance network (NBI projection), nodes coloured by WHO AWaRe class, sized by
+(a) Antibiotic co-resistance network (co-occurrence projection), nodes coloured by WHO AWaRe class, sized by
 degree. (b) Probability of acquiring a new resistance versus network-exposure $\rho$ for the antibiotic
 and pathogen projections; dashed line is the base rate. (c) Out-of-sample ROC (pooled rolling-origin
 test): both network scores beat the prevalence baseline, which is uninformative under RCA. (d)
@@ -307,15 +307,18 @@ $\tilde F_p^{(n)}=\sum_a M_{pa} Q_a^{(n-1)}$, $\tilde Q_a^{(n)}=1/\sum_p M_{pa}/
 normalising each iterate by its mean, to convergence. Global scores use the full matrix; in-block
 scores are computed on each block's sub-matrix and $z$-scored within block before pooling.
 
-\paragraph{Projections.} One-mode projections use the resource-allocation (NBI) weighting of
-Ref.~\cite{zhou2007}: $W_{ab}=\tfrac{1}{k_b}\sum_p \tfrac{M_{pa}M_{pb}}{k_p}$ for the antibiotic
-layer (and the transpose for pathogens), symmetrised. We also verified that a bipartite-configuration
-(BiCM) validated projection yields essentially no edges, consistent with co-resistance being
-degree-explained; NBI and raw co-occurrence give equivalent predictive performance.
+\paragraph{Projections.} One-mode projections use the plain co-occurrence weighting
+$W_{ab}=\sum_p M_{pa}M_{pb}$---the number of species resistant to both drugs $a$ and $b$, symmetric by
+construction---for the antibiotic layer, and the analogous $W_{pq}=\sum_a M_{pa}M_{qa}$ for pathogens.
+We also verified that a bipartite-configuration (BiCM) validated projection yields essentially no edges,
+consistent with co-resistance being degree-explained. Among the projection weightings we tried, this
+raw co-occurrence gave the best out-of-sample prediction: degree-normalised weightings consistently
+\emph{lowered} the AUC (e.g.\ $0.71\to0.67$ under a symmetric degree normalisation), because the common,
+widely-shared co-resistances they down-weight are exactly what carries the predictive signal here.
 
 \paragraph{Network-exposure prediction.} The predictor is deliberately parameter-free, so that no
 quantity is tuned against the test set: the binarization ($\rca\ge 1$, the distribution median) and the
-projection (NBI) are both fixed a priori, and the exposure score is a pure ranking. For each origin
+projection (plain co-occurrence) are both fixed a priori, and the exposure score is a pure ranking. For each origin
 year $t$ we build $M$, the projection $W$ and each pathogen's repertoire from data with year $\le t$,
 and define the exposure $\rho_{pa}=\sum_{o} W_{ao} M_{po}/\sum_o W_{ao}$. Candidates are $(p,a)$ pairs
 susceptible and observed at $t$ and observed at $t+1$; the label is $\rca$-resistance at $t+1$. Because
@@ -323,8 +326,9 @@ there is nothing to fit, we evaluate by \emph{rolling origin}: every origin $t=2
 (predicting $2020\ldots2024$) is a genuine out-of-sample test, and we report the rank-based AUC per
 origin and pooled. Significance uses \num{200} permutations of the network node labels. Baselines are
 resistance prevalence and current proximity-to-threshold. A separate robustness sweep over alternative
-binarizations (absolute thresholds, $\rca\ge1.5$) and network definitions (raw co-occurrence,
-BiCM-validated) confirms the a-priori choice is representative rather than optimised.
+binarizations (absolute thresholds, $\rca\ge1.5$) and projection weightings (degree-normalised,
+BiCM-validated) confirms that the plain co-occurrence choice is the simplest available and is not
+optimised against the test set---if anything the alternatives we tried predicted less well.
 
 \paragraph{External validation.} Antibiotic complexity is compared (Spearman) to the WHO AWaRe class
 (Access/Watch/Reserve), taken from the WHO 2023 AWaRe classification~\cite{who_aware} (all
@@ -335,7 +339,6 @@ plus \textit{E.\ coli}; Mann--Whitney).
 \begin{thebibliography}{9}
 \bibitem{hidalgo2009} C. A. Hidalgo and R. Hausmann, \textit{PNAS} \textbf{106}, 10570 (2009).
 \bibitem{tacchella2012} A. Tacchella \textit{et al.}, \textit{Sci. Rep.} \textbf{2}, 723 (2012).
-\bibitem{zhou2007} T. Zhou \textit{et al.}, \textit{Phys. Rev. E} \textbf{76}, 046115 (2007).
 \bibitem{aufiero2024} S. Aufiero, G. De Marzo \textit{et al.}, \textit{Sci. Rep.} \textbf{14}, 11752 (2024).
 \bibitem{demarzo2023chess} G. De Marzo and V. D. P. Servedio, \textit{Sci. Rep.} \textbf{13}, 5327 (2023).
 \bibitem{laudati2023} D. Laudati, M. S. Mariani, L. Pietronero, A. Zaccaria, \textit{J. Phys. Complex.} \textbf{4}, 025011 (2023).

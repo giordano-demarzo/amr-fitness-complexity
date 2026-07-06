@@ -38,7 +38,7 @@ ap = argparse.ArgumentParser(description="Regenerate all paper data and figures 
 ap.add_argument("--input",  default=DEF_INPUT, help="species x year x antibiotic summary CSV")
 ap.add_argument("--outdir", default=HERE, help="base output dir (default: project root)")
 ap.add_argument("--figdir", default=None, help="override figure dir (default: <outdir>/paper/figures)")
-ap.add_argument("--datadir", default=None, help="override data dir (default: <outdir>/results/nbi_projection)")
+ap.add_argument("--datadir", default=None, help="override data dir (default: <outdir>/results/analysis)")
 ap.add_argument("--permutations", type=int, default=200,
                 help="node-label permutations for the prediction significance null (0 to skip)")
 ap.add_argument("--null-samples", type=int, default=100,
@@ -46,7 +46,7 @@ ap.add_argument("--null-samples", type=int, default=100,
 args = ap.parse_args()
 
 FIG  = args.figdir  or f"{args.outdir}/paper/figures"
-DATA = args.datadir or f"{args.outdir}/results/nbi_projection"
+DATA = args.datadir or f"{args.outdir}/results/analysis"
 REF  = f"{HERE}/data/reference"          # WHO AWaRe + ESKAPE reference labels (see SOURCES.md)
 os.makedirs(FIG, exist_ok=True); os.makedirs(DATA, exist_ok=True)
 
@@ -94,17 +94,15 @@ def efc(X, n=3000, tol=1e-12):
         F, Q = Fn, Qn
     return F, Q
 
-def nbi_cols(R):
-    """NBI / resource-allocation projection (Zhou 2007) onto antibiotics (columns)."""
-    ab = list(R.columns); A = R.fillna(0).astype(float).to_numpy().T; kx = A.sum(1); ky = A.sum(0)
-    W = ((A * np.where(ky > 0, 1 / ky, 0)[None, :]) @ A.T) * np.where(kx > 0, 1 / kx, 0)[None, :]
-    W = (W + W.T) / 2; np.fill_diagonal(W, 0); return pd.DataFrame(W, index=ab, columns=ab)
+def cooc_cols(R):
+    """Co-occurrence projection onto antibiotics: W_ab = # species resistant to both a and b."""
+    ab = list(R.columns); A = R.fillna(0).astype(float).to_numpy().T
+    W = A @ A.T; np.fill_diagonal(W, 0.0); return pd.DataFrame(W, index=ab, columns=ab)
 
-def nbi_rows(R):
-    """NBI projection onto pathogens (rows)."""
-    sp = list(R.index); A = R.fillna(0).astype(float).to_numpy(); kx = A.sum(1); ky = A.sum(0)
-    W = ((A * np.where(ky > 0, 1 / ky, 0)[None, :]) @ A.T) * np.where(kx > 0, 1 / kx, 0)[None, :]
-    W = (W + W.T) / 2; np.fill_diagonal(W, 0); return pd.DataFrame(W, index=sp, columns=sp)
+def cooc_rows(R):
+    """Co-occurrence projection onto pathogens: W_pq = # antibiotics resisted by both p and q."""
+    sp = list(R.index); A = R.fillna(0).astype(float).to_numpy()
+    W = A @ A.T; np.fill_diagonal(W, 0.0); return pd.DataFrame(W, index=sp, columns=sp)
 
 def auc(y, s):
     y = np.asarray(y); s = np.asarray(s, float); n1 = y.sum(); n0 = len(y) - n1
@@ -136,8 +134,8 @@ def stage_prediction():
     for t in ORIGINS:
         pr_h = win(2004, t); Rh = rca_bin(pr_h)            # expanding history
         pr_n = win(t + 1, t + 1); Rn = rca_bin(pr_n)       # next-year labels
-        Waa = nbi_cols(Rh); Was = Waa.sum(1)
-        Wpp = nbi_rows(Rh); Wps = Wpp.sum(1)
+        Waa = cooc_cols(Rh); Was = Waa.sum(1)
+        Wpp = cooc_rows(Rh); Wps = Wpp.sum(1)
         pop = Rh.mean(0); ab = list(Rh.columns); sp = list(Rh.index); Rh0 = Rh.astype(float)
         for p in sp:
             if p not in pr_n.index: continue
@@ -173,9 +171,9 @@ def stage_prediction():
                 pr_h = win(2004, t); Rh = rca_bin(pr_h); pr_n = win(t + 1, t + 1); Rn = rca_bin(pr_n)
                 ab = list(Rh.columns); sp = list(Rh.index); Rh0 = Rh.astype(float)
                 if proj == "abx":
-                    W = nbi_cols(Rh); perm = rng.permutation(ab); Wp = W.loc[perm, perm]; Wp.index = ab; Wp.columns = ab
+                    W = cooc_cols(Rh); perm = rng.permutation(ab); Wp = W.loc[perm, perm]; Wp.index = ab; Wp.columns = ab
                 else:
-                    W = nbi_rows(Rh); perm = rng.permutation(sp); Wp = W.loc[perm, perm]; Wp.index = sp; Wp.columns = sp
+                    W = cooc_rows(Rh); perm = rng.permutation(sp); Wp = W.loc[perm, perm]; Wp.index = sp; Wp.columns = sp
                 Ws = Wp.sum(1)
                 for p in sp:
                     if p not in pr_n.index: continue
@@ -392,7 +390,7 @@ def stage_figures(S, C, hub):
     # ---- FIGURE 4 -------------------------------------------------------------
     te = C.copy()
     hb10 = hub.reset_index().sort_values("AUC", ascending=False).head(10)
-    W = nbi_cols(M); G = nx.from_pandas_adjacency(W)
+    W = cooc_cols(M); G = nx.from_pandas_adjacency(W)
     G.remove_edges_from([(u, v) for u, v, d in G.edges(data=True) if d["weight"] <= 0])
     posl = nx.spring_layout(G, weight="weight", seed=1, k=0.7)
     fig, ax = plt.subplots(2, 2, figsize=(13.5, 11))
@@ -409,8 +407,8 @@ def stage_figures(S, C, hub):
         g = t.groupby("b").agg(x=(col, "mean"), p=("label", "mean"))
         ax[0, 1].plot(g.x, g.p, "o-", color=c, label=lab, lw=2, ms=7)
     ax[0, 1].axhline(te.label.mean(), ls="--", color="gray", label="base rate")
-    ax[0, 1].set_xlabel(r"network exposure $\rho$"); ax[0, 1].set_ylabel("P(acquire resistance)")
-    ax[0, 1].set_title("(b) Resistance acquisition vs network exposure"); ax[0, 1].legend(frameon=False)
+    ax[0, 1].set_xlabel(r"co-resistance exposure $\rho$"); ax[0, 1].set_ylabel("P(acquire resistance)")
+    ax[0, 1].set_title("(b) Resistance acquisition vs co-resistance exposure"); ax[0, 1].legend(frameon=False)
     def roc(y, s):
         o = np.argsort(-s); y = np.asarray(y)[o]; tpr = np.cumsum(y) / y.sum(); fpr = np.cumsum(1 - y) / (len(y) - y.sum())
         return np.r_[0, fpr], np.r_[0, tpr]
@@ -427,10 +425,10 @@ def stage_figures(S, C, hub):
     fig.tight_layout(); fig.savefig(f"{FIG}/fig4_prediction.pdf"); fig.savefig(f"{FIG}/fig4_prediction.png", dpi=200); plt.close(fig)
 
     # ---- FIGURE 5 -------------------------------------------------------------
-    Wa = nbi_cols(M); Ga = nx.from_pandas_adjacency(Wa)
+    Wa = cooc_cols(M); Ga = nx.from_pandas_adjacency(Wa)
     Ga.remove_edges_from([(u, v) for u, v, d in Ga.edges(data=True) if d["weight"] <= 0])
     posA = nx.spring_layout(Ga, weight="weight", seed=3, k=0.8)
-    Wp = nbi_rows(M.loc[M.sum(1) >= 3]); Gp = nx.from_pandas_adjacency(Wp)
+    Wp = cooc_rows(M.loc[M.sum(1) >= 3]); Gp = nx.from_pandas_adjacency(Wp)
     Gp.remove_edges_from([(u, v) for u, v, d in Gp.edges(data=True) if d["weight"] <= 0])
     posP = nx.spring_layout(Gp, weight="weight", seed=5, k=0.5)
     SNAP = [2009, 2014, 2019, 2024]; cumR = {}; acc = None

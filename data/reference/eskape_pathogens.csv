@@ -1,0 +1,8 @@
+"match_string","label","note","source"
+"enterococcus faecium","ESKAPE","E — original ESKAPE","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"staphylococcus aureus","ESKAPE","S — original ESKAPE","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"klebsiella pneumoniae","ESKAPE","K — original ESKAPE","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"acinetobacter baumannii","ESKAPE","A — original ESKAPE","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"pseudomonas aeruginosa","ESKAPE","P — original ESKAPE","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"enterobacter","ESKAPE","E — original ESKAPE (Enterobacter spp.)","ESKAPE acronym (Rice 2008; J Infect Dis 197:1079)"
+"escherichia coli","ESKAPEE","second E — the ESKAPEE extension","ESKAPEE extension adding E. coli (kept by user request)"

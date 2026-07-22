@@ -59,40 +59,27 @@ The resulting pathogen--antibiotic network is not organised as the single nested
 The same topology also predicts future comparative-resistance signals. A parameter-free exposure score ranks currently RCA-negative pairs from the RCA-positive links already surrounding them in antibiotic or pathogen relatedness networks. In prospective tests using past data only, the antibiotic-network score achieved a pooled AUC of 0.71, and remained stable over forecast horizons of one to five years. The framework therefore turns routine counts into an auditable early-warning ranking: every prioritised pair can be traced to observed resistance fractions, comparative links and explicit network neighbours, without fitting a black-box classifier.
 
 \section*{Objectives}
-We pursued three linked objectives:
-\begin{enumerate}[label=(\roman*)]
-\item construct an interpretable pathogen--antibiotic network that identifies resistance associations that are comparatively prominent within the analysed surveillance dataset;
-\item characterise the network organisation suggested by previous Economic Complexity analyses and by the known heterogeneity of AMR, and determine the scale at which Fitness--Complexity yields interpretable pathogen and antibiotic rankings; and
-\item test prospectively whether exposure to existing network signals can prioritise pathogen--antibiotic pairs that become RCA-positive at one-year and longer forecast horizons.
-\end{enumerate}
+We pursued three linked objectives: (\emph{i}) construct an interpretable pathogen--antibiotic network that identifies resistance associations that are comparatively prominent within the analysed surveillance dataset; (\emph{ii}) characterise the network organisation suggested by previous Economic Complexity analyses and by the known heterogeneity of AMR, and determine the scale at which Fitness--Complexity yields interpretable pathogen and antibiotic rankings; and
+(\emph{iii}) test prospectively whether exposure to existing network signals can prioritise pathogen--antibiotic pairs that become RCA-positive at one-year and longer forecast horizons.
 
 \section*{Methods}
 \subsection*{Data, resistance fractions and revealed comparative resistance}
 The input contains annual species--antibiotic counts from the Pfizer ATLAS surveillance programme distributed through the Vivli AMR Register, spanning 394 species, 43 antibiotics and 2004--2024~\cite{atlas}. For each analysis window, resistant and tested counts were pooled before applying the minimum-isolate threshold. A pair \((p,a)\) was retained when at least \(n_{\min}=30\) isolates had been tested, and its resistance fraction was
 \[
- r_{pa}=\frac{n^R_{pa}}{N_{pa}},
+ r_{pa}=\frac{n^R_{pa}}{N_{pa}}
 \]
 where intermediate isolates contribute to \(N_{pa}\) but not to \(n^R_{pa}\). If the pair was absent or did not reach the threshold, \(r_{pa}\) was undefined. The complete workflow was also repeated at \(n_{\min}=10\) and \(50\), with all other settings unchanged.
 
 Raw percentages are difficult to compare across a heterogeneous table. A high resistance fraction may reflect a pathogen that is broadly resistant, an antibiotic for which resistance is common across many pathogens, or a particularly prominent association between that pathogen and antibiotic. To isolate the third component from the first two, we adapted revealed comparative advantage from Economic Complexity~\cite{hidalgo2009,tacchella2012}. Let \(\mathcal O\) be the sufficiently observed cells in an analysis window, \(R_p=\sum_{a:(p,a)\in\mathcal O}r_{pa}\), \(A_a=\sum_{p:(p,a)\in\mathcal O}r_{pa}\), and \(T=\sum_{(p,a)\in\mathcal O}r_{pa}\). Then
 \[
- \rca_{pa}=\frac{r_{pa}}{R_pA_a/T}=\frac{r_{pa}T}{R_pA_a}.
+ \rca_{pa}=\frac{r_{pa}}{R_pA_a/T}=\frac{r_{pa}T}{R_pA_a}
 \]
 Thus \(\rca_{pa}\geq1\) identifies a resistance fraction at least as large as the value implied by the pathogen and antibiotic marginals in the same dataset and time window; for example, \(\rca_{pa}=2\) denotes twice that marginal expectation. We call this an \emph{RCA-positive} or \emph{revealed comparative-resistance} link. It is a relative, within-dataset signal, not a clinical breakpoint or an absolute biological label. The implemented binary matrix is
 \[
- M_{pa}=\mathbf 1\{\rca_{pa}\geq1\}.
+ M_{pa}=\mathbf 1\{\rca_{pa}\geq1\}
 \]
 Because comparisons with undefined RCA evaluate as false in the pipeline, \(M_{pa}=0\) combines sufficiently observed cells with \(\rca_{pa}<1\) and insufficiently observed cells. A zero therefore means ``no RCA-positive link in the analysed surveillance universe'', not confirmed susceptibility.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.78\textwidth]{figures/fig1_binarization.pdf}
-\caption{From surveillance counts to the bipartite network. Pooled resistance fractions (a) are normalised into RCA values (b) and thresholded at \(\rca=1\) to obtain \(M\) (c). RCA defines a comparative signal within the selected data and time window, not a clinical susceptibility category.}
-\end{figure}
-\vspace{-2pt}
-
-\begin{multicols}{2}
-\setlength{\parskip}{2.4pt}
 \subsection*{Why measure nestedness?}
 Economic Complexity was developed for bipartite country--product networks. At the conceptual level, a link records that a country exports a product. Because countries may export small quantities of many products, empirical Fitness--Complexity analyses commonly use revealed comparative advantage to obtain the binary matrix on which the rankings are calculated: a link then retains a product that is important relative to that country's export profile. Our construction follows the same normalisation logic, but with a different interpretation. Pathogens replace countries, antibiotics replace products, and a link denotes a comparatively prominent resistance association rather than simply that the pair was tested.
 
@@ -102,13 +89,13 @@ We tested both possibilities in the AMR matrix. A pathogen's degree is the numbe
 
 For two pathogen rows \(i,j\), let \(k_i\) and \(k_j\) be their degrees and \(O_{ij}=\sum_aM_{ia}M_{ja}\) their number of shared antibiotic neighbours. Under a degree-based expectation, \(\langle O_{ij}\rangle=k_ik_j/A\), where \(A\) is the number of antibiotic columns. The score compares the observed overlap of a lower-degree profile with a higher-degree profile against this expectation; the analogous calculation is performed for antibiotic columns. The implemented in-block nestedness is~\cite{soleribalta2018,laudati2023}
 \[
-\begin{aligned}
-\I_R&=\sum_{\substack{i,j\\ k_i>k_j,\,b_i=b_j}}
-\frac{O_{ij}-k_ik_j/A}{k_j(C_i-1)},\\[-1pt]
-\I_C&=\sum_{\substack{a,c\\ k_a>k_c,\,b_a=b_c}}
-\frac{O_{ac}-k_ak_c/P}{k_c(C_a-1)},\\[-1pt]
-\I&=\frac{2}{P+A}(\I_R+\I_C),
-\end{aligned}
+\I_R=\sum_{\substack{i,j\\ k_i>k_j,\,b_i=b_j}}
+\frac{O_{ij}-k_ik_j/A}{k_j(C_i-1)} \quad,
+\qquad
+\I_C=\sum_{\substack{a,c\\ k_a>k_c,\,b_a=b_c}}
+\frac{O_{ac}-k_ak_c/P}{k_c(C_a-1)} \quad,
+\qquad
+\I=\frac{2}{P+A}(\I_R+\I_C)
 \]
 where \(b\) identifies a co-cluster and \(C\) its size. Global nestedness \(\N\) uses the same statistic with all nodes assigned to one block.
 
@@ -121,8 +108,8 @@ Applied to the AMR network, \emph{pathogen fitness} increases with the number an
 
 Starting from \(F_p^{(0)}=Q_a^{(0)}=1\), the pipeline iterates~\cite{tacchella2012}
 \[
- \widetilde F_p^{(n)}=\sum_aM_{pa}Q_a^{(n-1)},\qquad
- \widetilde Q_a^{(n)}=\left(\sum_p\frac{M_{pa}}{F_p^{(n-1)}}\right)^{-1},
+ \widetilde F_p^{(n)}=\sum_aM_{pa}Q_a^{(n-1)} \quad,\qquad
+ \widetilde Q_a^{(n)}=\left(\sum_p\frac{M_{pa}}{F_p^{(n-1)}}\right)^{-1}
 \]
 and normalises \(F\) and \(Q\) by their means at each step. Scores were calculated globally and separately within each co-cluster. Within-block scores were standardised before pooling, so they describe relative position within a module rather than an absolute scale shared across modules.
 
@@ -131,17 +118,16 @@ For external consistency, antibiotic complexity was compared across the WHO Acce
 \subsection*{Relatedness networks and prospective prioritisation}
 For each origin year \(t=2019,\ldots,2023\), all quantities were rebuilt using only data from 2004 through \(t\). The antibiotic projection counted pathogens linked to both antibiotics, and the pathogen projection counted antibiotics linked to both pathogens:
 \[
- W^A_{ab}=\sum_pM^{(t)}_{pa}M^{(t)}_{pb},\qquad
- W^P_{pq}=\sum_aM^{(t)}_{pa}M^{(t)}_{qa}.
+ W^A_{ab}=\sum_pM^{(t)}_{pa}M^{(t)}_{pb} \quad,\qquad
+ W^P_{pq}=\sum_aM^{(t)}_{pa}M^{(t)}_{qa}
 \]
 For a sufficiently observed pair \((p,a)\) that was RCA-negative at \(t\), antibiotic-network exposure was
 \[
- \rho^A_{pa}=\frac{\sum_oW^A_{ao}M^{(t)}_{po}}{\sum_oW^A_{ao}},
+ \rho^A_{pa}=\frac{\sum_oW^A_{ao}M^{(t)}_{po}}{\sum_oW^A_{ao}}
 \]
 the weighted fraction of antibiotic \(a\)'s network neighbourhood already RCA-positive for pathogen \(p\). The analogous pathogen-network score was \(\rho^P_{pa}=\sum_qW^P_{pq}M^{(t)}_{qa}/\sum_qW^P_{pq}\). The outcome was whether the same sufficiently tested pair had \(\rca_{pa}\geq1\) in year \(t+1\). The scores contain no fitted coefficients. Discrimination was measured by AUC against a baseline given by the antibiotic's current fraction of RCA-positive pathogen rows, with 200 node-label permutations used for significance comparisons.
 
 To test persistence beyond the next year, we additionally fixed the history, network, exposure scores and initial candidate set at \(t_0=2019\), and evaluated those unchanged scores against each target year from 2020 to 2024. At every horizon, evaluation was restricted to pairs sufficiently tested in the target year; the network was never refitted.
-\end{multicols}
 
 \section*{Results}
 \subsection*{The matrix contains several local hierarchies, not one global ladder}
@@ -153,21 +139,9 @@ The AMR network therefore resembles the block-nested organisation reported for f
 \subsection*{Block-conditioned scores recover clinically recognisable ordering}
 Applied to the complete matrix, the Fitness--Complexity iteration collapsed numerically onto one pathogen and one antibiotic: 138 of 139 global pathogen scores and 39 of 40 global antibiotic scores were below \(10^{-10}\) after normalisation. This distribution does not provide a stable cross-module ranking. The collapse is consistent with the absence of one global nested hierarchy and with the nonlinear complexity update, which strongly penalises links to low-fitness pathogens. Computing the scores separately within the co-clusters avoids forcing unrelated profiles onto one axis.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.94\textwidth]{figures/fig2_blocknested.pdf}
-\caption{Global and local organisation of RCA-positive links. In (a), rows and columns are ordered by five spectral co-clusters and by degree within each cluster; coloured links lie within matched blocks and dark links connect different blocks. Panel (b) compares global nestedness \(\N\) and in-block nestedness \(\I^*\) with the degree-corrected Bernoulli null.}
-\end{figure}
-
 Within blocks, antibiotic complexity increased across WHO AWaRe tiers (Spearman \(\rho=0.5895\), \(p=9.84\times10^{-5}\); 38 antibiotics with available scores). The association was weaker for global antibiotic complexity (\(\rho=0.4667\), \(p=0.0024\)) and reached \(\rho=0.6244\) (\(p=8.49\times10^{-4}\)) in the largest block. Taxa matching the ESKAPEE reference list had higher within-block pathogen fitness than other taxa: median standardised fitness was \(1.044\) for 16 matching taxa and \(-0.387\) for 107 others (one-sided Mann--Whitney \(p=4.60\times10^{-6}\)).
 
 These comparisons provide an external consistency check because AWaRe and ESKAPEE were withheld from network construction and score calculation. The agreement does not make the quantities equivalent: AWaRe is an antibiotic-stewardship classification, ESKAPEE identifies a selected group of clinically important taxa, and Fitness--Complexity measures only the topology of RCA-positive links. Within-block scores are relative to each module and should not be interpreted as absolute resistance levels shared across modules.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.96\textwidth]{figures/fig3_efc_validation.pdf}
-\caption{External consistency of the network rankings. Panel (a) compares within-block antibiotic complexity across WHO AWaRe categories. Panel (b) shows the collapse of the global Fitness--Complexity solution, whereas (c) compares within-block pathogen fitness between taxa in the ESKAPEE reference list and other taxa. Fitness is a network score, not evolutionary fitness.}
-\end{figure}
 
 Together, the structural and external-consistency results support a local use of Fitness--Complexity. The relevant comparison is not whether one pathogen is universally ``more resistant'' than another, but how broad and selective its RCA-positive profile is relative to pathogens in the same network context.
 
@@ -178,16 +152,9 @@ The event frequency increased across the exposure ranking. In sextiles of antibi
 
 The signal was not confined to the next year. With all features frozen at 2019, antibiotic-network AUCs remained in the range \(0.681\)--\(0.742\) at horizons of one through five years. The prevalence baseline remained near chance (AUC \(0.41\)--\(0.58\)). These comparisons include only pairs tested in the corresponding target year.
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.5\textwidth]{figures/fig4_prediction.pdf}
-\caption{Prospective prioritisation. Panel (a) shows the antibiotic relatedness network; (b) shows next-year RCA-positive frequencies across exposure; (c) reports pooled prospective ROC curves; and (d) reports performance by antibiotic. Prediction uses raw co-occurrence weights; degree normalisation is used only for the network layout in (a). The event is a transition to RCA-positive status, not proof of biological acquisition.}
-\end{figure}
-
 The conclusions were robust to the minimum-isolate threshold. Repeating the complete pipeline at \(n_{\min}=10,30,50\) preserved strong in-block nestedness and the ESKAPEE fitness separation. The default \(n_{\min}=30\) produced both the strongest within-block AWaRe association (\(\rho=0.590\), versus \(0.547\) and \(0.442\)) and the highest rolling-origin AUC (\(0.708\), versus \(0.638\) and \(0.702\)), balancing low-count noise against loss of coverage.
 
 \section*{Impact of the work}
-\begin{multicols}{2}
 The framework adds an interpretable relational layer to routine AMR surveillance. Its path is explicit---counts \(\rightarrow r_{pa}\rightarrow\rca_{pa}\rightarrow M\rightarrow\) relatedness network \(\rightarrow\) exposure score---so each prioritised pair can be traced to the observations, existing links and network neighbours that generated its score. The ranking requires no fitted multivariable classifier and can be updated whenever new counts arrive. It complements pairwise summaries by identifying coherent resistance contexts, providing local comparison axes and focusing attention on future candidate signals.
 
 The repository provides a deterministic end-to-end analysis script, reference mappings, output tables, publication figures and a static exploratory dashboard. The dashboard displays antibiotic-network positions, AWaRe labels, within-block scores, pathogen timelines and prioritisation scores. Its optional forward probabilities are generated by a separate one-variable calibration of antibiotic-network exposure; this display layer is not part of the parameter-free evaluation reported here and should not be interpreted as clinical risk estimation. The outputs could support surveillance review, additional testing or confirmatory analysis; they are not treatment recommendations.
@@ -195,10 +162,37 @@ The repository provides a deterministic end-to-end analysis script, reference ma
 The workflow can also be re-estimated for different periods or geographical subsets. Starting from isolate-level data, resistance fractions, RCA marginals, modules and networks must be recomputed within each selected country, region, continent or time window. Temporal re-estimation is demonstrated here. Geographical re-estimation is a deployment opportunity rather than a reported result, because the downstream table used for this analysis is pooled across countries.
 
 Interpretation remains bounded by the surveillance universe. RCA is relative rather than absolute; ATLAS sampling and testing are not population-random; and the implemented zero combines sufficiently observed RCA-negative pairs with insufficiently observed pairs. The number of co-clusters is fixed at five, and the nestedness null is degree-corrected only in expectation. AWaRe and ESKAPEE provide external consistency rather than clinical validation. AUC measures ranking rather than calibrated individual risk, and a change in RCA status may reflect changing marginals or surveillance composition as well as biological change. The analysis does not establish causal acquisition, transmission, treatment failure or clinical outcome. Within these limits, it provides a reproducible and inspectable route from routine surveillance counts to structural understanding and future-priority signals.
-\end{multicols}
+
+\section*{Tables/figures}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig1_binarization.pdf}
+\caption{From surveillance counts to the bipartite network. Pooled resistance fractions (a) are normalised into RCA values (b) and thresholded at \(\rca=1\) to obtain \(M\) (c). RCA defines a comparative signal within the selected data and time window, not a clinical susceptibility category.}
+\end{figure}
+\vspace{-2pt}
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig2_blocknested.pdf}
+\caption{Global and local organisation of RCA-positive links. In (a), rows and columns are ordered by five spectral co-clusters and by degree within each cluster; coloured links lie within matched blocks and dark links connect different blocks. Panel (b) compares global nestedness \(\N\) and in-block nestedness \(\I^*\) with the degree-corrected Bernoulli null.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{figures/fig3_efc_validation.pdf}
+\caption{External consistency of the network rankings. Panel (a) compares within-block antibiotic complexity across WHO AWaRe categories. Panel (b) shows the collapse of the global Fitness--Complexity solution, whereas (c) compares within-block pathogen fitness between taxa in the ESKAPEE reference list and other taxa. Fitness is a network score, not evolutionary fitness.}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=1\textwidth]{figures/fig4_prediction.pdf}
+\caption{Prospective prioritisation. Panel (a) shows the antibiotic relatedness network; (b) shows next-year RCA-positive frequencies across exposure; (c) reports pooled prospective ROC curves; and (d) reports performance by antibiotic. Prediction uses raw co-occurrence weights; degree normalisation is used only for the network layout in (a). The event is a transition to RCA-positive status, not proof of biological acquisition.}
+\end{figure}
 
 \newpage
-\begin{thebibliography}{9}\small
+\begin{thebibliography}{9}
 \bibitem{atlas} Pfizer ATLAS antimicrobial surveillance programme, accessed through the Vivli AMR Register, 2004--2024. Vivli AMR Register: \url{https://amr.vivli.org/}.
 \bibitem{hidalgo2009} Hidalgo CA, Hausmann R. The building blocks of economic complexity. \emph{Proc Natl Acad Sci USA}. 2009;106:10570--10575.
 \bibitem{tacchella2012} Tacchella A, Cristelli M, Caldarelli G, Gabrielli A, Pietronero L. A new metrics for countries' fitness and products' complexity. \emph{Sci Rep}. 2012;2:723.

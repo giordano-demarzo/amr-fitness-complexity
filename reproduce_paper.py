@@ -133,6 +133,7 @@ def stage_prediction():
     rows = []
     for t in ORIGINS:
         pr_h = win(2004, t); Rh = rca_bin(pr_h)            # expanding history
+        rca_h = rca_val(pr_h)                              # RCA magnitudes at t (proximity baseline)
         pr_n = win(t + 1, t + 1); Rn = rca_bin(pr_n)       # next-year labels
         Waa = cooc_cols(Rh); Was = Waa.sum(1)
         Wpp = cooc_rows(Rh); Wps = Wpp.sum(1)
@@ -149,11 +150,13 @@ def stage_prediction():
                 colv = Rh0[a].reindex(sp).fillna(0)
                 rho_path = (Wpp.loc[p] * colv).sum() / Wps[p] if Wps[p] > 0 else 0.0
                 rows.append(dict(t=t, Species=p, Antibiotic=a, rho_abx=rho_abx,
-                                 rho_path=rho_path, prev=pop[a], label=int(bool(Rn.loc[p, a]))))
+                                 rho_path=rho_path, rca_now=float(rca_h.loc[p, a]),
+                                 prev=pop[a], label=int(bool(Rn.loc[p, a]))))
     C = pd.DataFrame(rows)
     C.to_csv(f"{DATA}/clean_prediction.csv", index=False)
     print(f"      candidates {len(C)} | positives {int(C.label.sum())} (base rate {C.label.mean():.3f})")
     print(f"      pooled AUC  rho_abx={auc(C.label, C.rho_abx):.3f}  "
+          f"rca_now={auc(C.label, C.rca_now):.3f}  "
           f"rho_path={auc(C.label, C.rho_path):.3f}  prevalence={auc(C.label, C.prev):.3f}")
 
     # per-antibiotic predictability (contagion hubs)
@@ -358,7 +361,6 @@ def stage_figures(S, C, hub):
 
     # ---- FIGURE 3 -------------------------------------------------------------
     # AWARE and ESK are loaded at module scope from data/reference/ (see SOURCES.md)
-    Fg, Qg = efc(Mv); Fglob = pd.Series(Fg, index=sp)
     Qz = pd.Series(index=ab, dtype=float); Fz = pd.Series(index=sp, dtype=float)
     for b in range(5):
         ri = np.where(rb == b)[0]; ci = np.where(cb == b)[0]; sub = Mv[np.ix_(ri, ci)]
@@ -368,28 +370,21 @@ def stage_figures(S, C, hub):
         if Q.std() > 0: Qz[Q.index] = (Q - Q.mean()) / Q.std()
         if F.std() > 0: Fz[F.index] = (F - F.mean()) / F.std()
     esk = pd.Series({s: int(any(x in s.lower() for x in ESK)) for s in sp})
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+    fig, ax = plt.subplots(1, 2, figsize=(10.5, 5))
     data = [[Qz[a] for a in ab if AWARE.get(a) == lvl and a in Qz.dropna().index] for lvl in [1, 2, 3]]
     bp = ax[0].boxplot(data, labels=["Access", "Watch", "Reserve"], patch_artist=True, widths=0.6)
     for patch, lvl in zip(bp['boxes'], [1, 2, 3]): patch.set_facecolor(colA[lvl]); patch.set_alpha(0.8)
     rr, pp = spearmanr(*zip(*[(Qz[a], AWARE[a]) for a in ab if a in AWARE and a in Qz.dropna().index]))
     ax[0].set_title(f"(a) Antibiotic complexity vs AWaRe\n" + r"$\rho=%.2f$" % rr + f" (p={pp:.1e})")
     ax[0].set_ylabel("in-block complexity (z)")
-    g0 = Fglob[esk[esk == 0].index].dropna(); g1 = Fglob[esk[esk == 1].index].dropna()
-    bp1 = ax[1].boxplot([g0, g1], labels=["non-ESKAPE", "ESKAPE"], patch_artist=True, widths=0.6)
-    bp1['boxes'][0].set_facecolor("#adb5bd"); bp1['boxes'][1].set_facecolor("#c9184a")
-    for b in bp1['boxes']: b.set_alpha(0.85)
-    ax[1].set_yscale("log"); ax[1].set_title("(b) GLOBAL fitness (degenerate)\nESKAPE not fitter"); ax[1].set_ylabel("global fitness")
     d0 = Fz[esk[esk == 0].index].dropna(); d1 = Fz[esk[esk == 1].index].dropna()
-    bp2 = ax[2].boxplot([d0, d1], labels=["non-ESKAPE", "ESKAPE"], patch_artist=True, widths=0.6)
+    bp2 = ax[1].boxplot([d0, d1], labels=["non-ESKAPE", "ESKAPE"], patch_artist=True, widths=0.6)
     bp2['boxes'][0].set_facecolor("#adb5bd"); bp2['boxes'][1].set_facecolor("#c9184a")
     for b in bp2['boxes']: b.set_alpha(0.85)
-    ax[2].set_title("(c) IN-BLOCK fitness\nESKAPE $\\gg$ non-ESKAPE (p<0.001)"); ax[2].set_ylabel("in-block fitness (z)")
+    ax[1].set_title("(b) IN-BLOCK fitness\nESKAPE $\\gg$ non-ESKAPE (p<0.001)"); ax[1].set_ylabel("in-block fitness (z)")
     fig.tight_layout(); fig.savefig(f"{FIG}/fig3_efc_validation.pdf"); fig.savefig(f"{FIG}/fig3_efc_validation.png", dpi=200); plt.close(fig)
 
-    # ---- FIGURE 4 -------------------------------------------------------------
-    te = C.copy()
-    hb10 = hub.reset_index().sort_values("AUC", ascending=False).head(10)
+    # ---- ANTIBIOTIC SIMILARITY NETWORK (layout shared by the spreading figure) ----
     # For display, normalise the co-occurrence by drug degree (cosine): raw counts span
     # 5..500+, which collapses the force layout onto a few hubs and makes degree-scaled node
     # sizes explode. This affects only the drawing; the forecast uses raw co-occurrence.
@@ -401,77 +396,70 @@ def stage_figures(S, C, hub):
     G = nx.from_pandas_adjacency(Wn)
     G.remove_edges_from([(u, v) for u, v, d in G.edges(data=True) if d["weight"] <= 0])
     posl = nx.spring_layout(G, weight="weight", seed=1, k=1.1, iterations=300)
-    fig, ax = plt.subplots(2, 2, figsize=(13.5, 11))
-    ncol = [colA.get(AWARE.get(n, 2), "#cccccc") for n in G.nodes()]
     deg = dict(G.degree(weight="weight")); mxd = max(deg.values()) or 1.0
-    nx.draw_networkx_edges(G, posl, ax=ax[0, 0], alpha=0.15, width=1)
-    nx.draw_networkx_nodes(G, posl, ax=ax[0, 0], node_color=ncol,
-        node_size=[60 + 520 * (deg[n] / mxd) for n in G.nodes()],
-        edgecolors="k", linewidths=0.4)
-    nx.draw_networkx_labels(G, posl, ax=ax[0, 0], font_size=6.2)
-    ax[0, 0].set_title("(a) Antibiotic co-resistance network (colored by AWaRe)"); ax[0, 0].axis("off")
-    ax[0, 0].legend(handles=[Line2D([0], [0], marker='o', color='w', markerfacecolor=colA[l], markersize=9, label=n)
-        for l, n in [(1, "Access"), (2, "Watch"), (3, "Reserve")]], loc="lower right", frameon=False)
-    for col, c, lab in [("rho_abx", "#c9184a", "antibiotic-net"), ("rho_path", "#0077b6", "pathogen-net")]:
-        t = te.copy(); t["b"] = pd.qcut(t[col].rank(method="first"), 6, labels=False)
-        g = t.groupby("b").agg(x=(col, "mean"), p=("label", "mean"))
-        ax[0, 1].plot(g.x, g.p, "o-", color=c, label=lab, lw=2, ms=7)
-    ax[0, 1].axhline(te.label.mean(), ls="--", color="gray", label="base rate")
-    ax[0, 1].set_xlabel(r"co-resistance exposure $\rho$"); ax[0, 1].set_ylabel("P(acquire resistance)")
-    ax[0, 1].set_title("(b) Resistance acquisition vs co-resistance exposure"); ax[0, 1].legend(frameon=False)
+
+    # ---- FIGURE 4: projected network + spreading of one pathogen -------------
+    PATH = "Klebsiella pneumoniae"; SNAP = [2014, 2019, 2024]
+    fig, ax = plt.subplots(1, 4, figsize=(23, 5.8))
+    # (a) the full antibiotic similarity network, coloured by AWaRe, labelled
+    ncol = [colA.get(AWARE.get(n, 2), "#cccccc") for n in G.nodes()]
+    nx.draw_networkx_edges(G, posl, ax=ax[0], alpha=0.15, width=1)
+    nx.draw_networkx_nodes(G, posl, ax=ax[0], node_color=ncol,
+        node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()], edgecolors="k", linewidths=0.4)
+    nx.draw_networkx_labels(G, posl, ax=ax[0], font_size=5.2)
+    ax[0].set_title("(a) Antibiotic similarity network (colored by AWaRe)"); ax[0].axis("off")
+    ax[0].legend(handles=[Line2D([0], [0], marker='o', color='w', markerfacecolor=colA[l], markersize=9, label=n)
+        for l, n in [(1, "Access"), (2, "Watch"), (3, "Reserve")]], loc="lower right", frameon=False, fontsize=9)
+    # (b,c,d) drugs Klebsiella pneumoniae comparatively defeats, cumulative across three years
+    tags = ["(b)", "(c)", "(d)"]; acc = None
+    for k, y in enumerate(SNAP):
+        st = (rca_val(win(2004, y)) >= 1).reindex(index=M.index, columns=M.columns).fillna(False)
+        acc = st if acc is None else (acc | st)
+        lit = set(a for a in G.nodes() if PATH in acc.index and a in acc.columns and acc.loc[PATH, a])
+        axx = ax[k + 1]
+        nx.draw_networkx_edges(G, posl, ax=axx, alpha=0.12, width=0.8)
+        cols = ["#c9184a" if n in lit else "#e6e6e6" for n in G.nodes()]
+        nx.draw_networkx_nodes(G, posl, ax=axx, node_color=cols,
+            node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()], edgecolors="gray", linewidths=0.3)
+        axx.set_title(f"{tags[k]} K. pneumoniae — {y}   ({len(lit)} drugs defeated)", fontsize=11, color="#c9184a")
+        axx.axis("off")
+    fig.tight_layout(); fig.savefig(f"{FIG}/fig5_spreading.pdf")
+    fig.savefig(f"{FIG}/fig5_spreading.png", dpi=170); plt.close(fig)
+
+    # ---- FIGURE 5: prospective forecasting --------------------------------------
+    te = C.copy()
+    hb10 = hub.reset_index().sort_values("AUC", ascending=False).head(10)
+    fig, ax = plt.subplots(1, 4, figsize=(22, 5.2))
+    # (a) acquisition probability vs network exposure
+    t = te.copy(); t["b"] = pd.qcut(t["rho_abx"].rank(method="first"), 6, labels=False)
+    g = t.groupby("b").agg(x=("rho_abx", "mean"), p=("label", "mean"))
+    ax[0].plot(g.x, g.p, "o-", color="#c9184a", label="antibiotic-net", lw=2, ms=7)
+    ax[0].axhline(te.label.mean(), ls="--", color="gray", label="base rate")
+    ax[0].set_xlabel(r"co-resistance exposure $\rho$"); ax[0].set_ylabel("P(acquire resistance)")
+    ax[0].set_title("(a) Acquisition vs co-resistance exposure"); ax[0].legend(frameon=False)
+    # (b) ROC, including the trivial RCA-proximity baseline
     def roc(y, s):
         o = np.argsort(-s); y = np.asarray(y)[o]; tpr = np.cumsum(y) / y.sum(); fpr = np.cumsum(1 - y) / (len(y) - y.sum())
         return np.r_[0, fpr], np.r_[0, tpr]
-    for col, c, lab in [("rho_abx", "#c9184a", "antibiotic-net"), ("rho_path", "#0077b6", "pathogen-net"), ("prev", "#adb5bd", "prevalence")]:
-        f, t = roc(te.label.values, te[col].values); ax[1, 0].plot(f, t, color=c, lw=2, label=f"{lab} (AUC={auc(te.label, te[col]):.2f})")
-    ax[1, 0].plot([0, 1], [0, 1], ls="--", color="k", alpha=0.5)
-    ax[1, 0].set_xlabel("false positive rate"); ax[1, 0].set_ylabel("true positive rate")
-    ax[1, 0].set_title("(c) Out-of-sample prediction (rolling origin, 2020–2024)"); ax[1, 0].legend(frameon=False, loc="lower right")
+    for col, c, lab in [("rho_abx", "#c9184a", "antibiotic-net"), ("rca_now", "#7209b7", "RCA proximity"),
+                        ("prev", "#adb5bd", "prevalence")]:
+        f, t = roc(te.label.values, te[col].values); ax[1].plot(f, t, color=c, lw=2, label=f"{lab} (AUC={auc(te.label, te[col]):.2f})")
+    ax[1].plot([0, 1], [0, 1], ls="--", color="k", alpha=0.5)
+    ax[1].set_xlabel("false positive rate"); ax[1].set_ylabel("true positive rate")
+    ax[1].set_title("(b) Out-of-sample prediction (2020–2024)"); ax[1].legend(frameon=False, loc="lower right", fontsize=9.5)
+    # (c) contagion hubs
     hbb = hb10.sort_values("AUC")
-    ax[1, 1].barh(hbb.Antibiotic, hbb.AUC, color=[colA.get(AWARE.get(a, 2), "#ccc") for a in hbb.Antibiotic], edgecolor="k", lw=0.4)
-    ax[1, 1].axvline(0.5, ls="--", color="gray"); ax[1, 1].set_xlim(0.5, 1.0)
-    ax[1, 1].set_xlabel("prediction AUC"); ax[1, 1].set_title("(d) Contagion-hub antibiotics")
-    for lbl in ax[1, 1].get_yticklabels(): lbl.set_fontsize(8.5)
+    ax[2].barh(hbb.Antibiotic, hbb.AUC, color=[colA.get(AWARE.get(a, 2), "#ccc") for a in hbb.Antibiotic], edgecolor="k", lw=0.4)
+    ax[2].axvline(0.5, ls="--", color="gray"); ax[2].set_xlim(0.5, 1.0)
+    ax[2].set_xlabel("prediction AUC"); ax[2].set_title("(c) Contagion-hub antibiotics")
+    for lbl in ax[2].get_yticklabels(): lbl.set_fontsize(8.5)
+    # (d) network exposure carries signal orthogonal to mere RCA proximity
+    m0 = te.label == 0; m1 = te.label == 1
+    ax[3].scatter(te.rca_now[m0], te.rho_abx[m0], s=10, c="#cbcbcb", alpha=0.5, edgecolors="none", label="no acquisition")
+    ax[3].scatter(te.rca_now[m1], te.rho_abx[m1], s=24, c="#c9184a", alpha=0.85, edgecolors="k", linewidths=0.3, label="acquired next year")
+    ax[3].set_xlabel(r"current RCA proximity  $\mathrm{RCA}_{pa}(t)$"); ax[3].set_ylabel(r"network exposure  $\rho^A_{pa}$")
+    ax[3].set_title("(d) Exposure adds signal beyond RCA proximity"); ax[3].legend(frameon=False, loc="upper left", fontsize=9)
     fig.tight_layout(); fig.savefig(f"{FIG}/fig4_prediction.pdf"); fig.savefig(f"{FIG}/fig4_prediction.png", dpi=200); plt.close(fig)
-
-    # ---- FIGURE 5 -------------------------------------------------------------
-    Wa = cooc_cols(M); Ga = nx.from_pandas_adjacency(Wa)
-    Ga.remove_edges_from([(u, v) for u, v, d in Ga.edges(data=True) if d["weight"] <= 0])
-    posA = nx.spring_layout(Ga, weight="weight", seed=3, k=0.8)
-    Wp = cooc_rows(M.loc[M.sum(1) >= 3]); Gp = nx.from_pandas_adjacency(Wp)
-    Gp.remove_edges_from([(u, v) for u, v, d in Gp.edges(data=True) if d["weight"] <= 0])
-    posP = nx.spring_layout(Gp, weight="weight", seed=5, k=0.5)
-    SNAP = [2009, 2014, 2019, 2024]; cumR = {}; acc = None
-    for y in SNAP:
-        st = (rca_val(win(2004, y)) >= 1).reindex(index=M.index, columns=M.columns).fillna(False)
-        acc = st if acc is None else (acc | st); cumR[y] = acc.copy()
-    examples = [("pathogen", "Klebsiella pneumoniae"), ("pathogen", "Escherichia coli"),
-                ("antibiotic", "Meropenem"), ("antibiotic", "Ciprofloxacin")]
-    fig, axes = plt.subplots(len(examples), len(SNAP), figsize=(4 * len(SNAP), 3.5 * len(examples)))
-    for i, (kind, name) in enumerate(examples):
-        for j, y in enumerate(SNAP):
-            axx = axes[i, j]; Rc = cumR[y]
-            if kind == "pathogen":
-                G, pos, c = Ga, posA, "#c9184a"
-                lit = set(a for a in G.nodes() if name in Rc.index and a in Rc.columns and Rc.loc[name, a])
-                nx.draw_networkx_edges(G, pos, ax=axx, alpha=0.10, width=0.6)
-                cols = [c if n in lit else "#e6e6e6" for n in G.nodes()]
-                nx.draw_networkx_nodes(G, pos, ax=axx, node_color=cols, node_size=80, edgecolors="gray", linewidths=0.3)
-                tag = f"{name.split()[0][0]}. {name.split()[1]}"
-            else:
-                G, pos, c = Gp, posP, "#0077b6"
-                lit = set(p for p in G.nodes() if p in Rc.index and name in Rc.columns and Rc.loc[p, name])
-                nx.draw_networkx_edges(G, pos, ax=axx, alpha=0.05, width=0.4)
-                cols = [c if n in lit else "#e6e6e6" for n in G.nodes()]
-                nx.draw_networkx_nodes(G, pos, ax=axx, node_color=cols, node_size=32, edgecolors="none")
-                tag = name
-            axx.set_title(f"{tag} — {y}   ({len(lit)} R)", fontsize=10, color=c); axx.axis("off")
-        lab = ("pathogen on\nantibiotic network" if kind == "pathogen" else "antibiotic on\npathogen network")
-        axes[i, 0].text(-0.08, 0.5, lab, transform=axes[i, 0].transAxes, rotation=90, va="center", ha="center",
-                        fontsize=10, color=("#c9184a" if kind == "pathogen" else "#0077b6"), fontweight="bold")
-    fig.suptitle("Spreading of resistance across the relatedness networks (cumulative; nodes light up and never revert)",
-                 fontsize=13, y=0.995)
-    fig.tight_layout(); fig.savefig(f"{FIG}/fig5_spreading.pdf"); fig.savefig(f"{FIG}/fig5_spreading.png", dpi=170); plt.close(fig)
 
 # ================================================================ main
 if __name__ == "__main__":

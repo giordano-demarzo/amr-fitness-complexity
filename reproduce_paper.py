@@ -53,6 +53,9 @@ os.makedirs(FIG, exist_ok=True); os.makedirs(DATA, exist_ok=True)
 MIN = 30           # min tested isolates per cell (matches the summary file's own filter)
 POOL = (2015, 2024)  # pooled window for structural / validation figures
 
+pal_blue = ['#013a63',  '#2a6f97', '#468faf', '#61a5c2', '#89c2d9', '#a9d6e5']
+# pal_blue = [f"#{c}" for c in pal_blue]
+
 # ---- external reference labels, loaded from auditable files (not hardcoded) ----
 # WHO AWaRe 2023 tier per ATLAS antibiotic (Access=1, Watch=2, Reserve=3).
 _aw = pd.read_csv(f"{REF}/atlas_antibiotic_aware_map.csv")
@@ -336,7 +339,7 @@ def stage_figures(S, C, hub):
             idx = np.where(labels == b)[0]; idx = idx[np.argsort(-deg[idx])]; out += list(idx)
         return np.array(out)
     ro = order(rb, deg_r); co = order(cb, deg_c)
-    fig, ax = plt.subplots(1, 2, figsize=(13.5, 6), gridspec_kw={'width_ratios': [1.25, 1]})
+    fig, ax = plt.subplots(1, 2, figsize=(13.5, 6), gridspec_kw={'width_ratios': [2, 1]})
     Msort = Mv[np.ix_(ro, co)]; rgb = np.ones((*Msort.shape, 3)); rbl = rb[ro]; cbl = cb[co]
     for i in range(Msort.shape[0]):
         for j in range(Msort.shape[1]):
@@ -354,7 +357,7 @@ def stage_figures(S, C, hub):
     ax[1].bar(x + w / 2, nul, w, yerr=nsd, color="#adb5bd", label="degree null", capsize=4)
     ax[1].set_xticks(x); ax[1].set_xticklabels(["global\n$\\mathcal{N}$", "in-block\n$\\mathcal{I}^*$"]); ax[1].set_ylabel("nestedness")
     ax[1].set_title("(b) Nestedness is a local property\n$\\mathcal{I}^*/\\mathcal{N}=%.1f$ (companies-like)" % nest['ratio'])
-    ax[1].text(1, nest['I_obs'] + 0.02, "z = %.1f" % nest['zI'], ha="center", color="#c9184a", fontweight="bold")
+    ax[1].text(1, nest['I_obs'] + 0.02, "z = %.1f" % nest['zI'], ha="center", color="#190309", fontweight="bold")
     ax[1].text(0, nest['N_null'] + nest['N_null_sd'] + 0.02, "z = %.1f" % nest['zN'], ha="center", color="#0077b6")
     ax[1].legend(frameon=False)
     fig.tight_layout(); fig.savefig(f"{FIG}/fig2_blocknested.pdf"); fig.savefig(f"{FIG}/fig2_blocknested.png", dpi=200); plt.close(fig)
@@ -399,41 +402,121 @@ def stage_figures(S, C, hub):
     deg = dict(G.degree(weight="weight")); mxd = max(deg.values()) or 1.0
 
     # ---- FIGURE 4: projected network + spreading of one pathogen -------------
-    PATH = "Klebsiella pneumoniae"; SNAP = [2014, 2019, 2024]
+    PATH = "Klebsiella pneumoniae"
+    SNAP = [2014, 2019, 2024]
     fig, ax = plt.subplots(1, 4, figsize=(23, 5.8))
-    # (a) the full antibiotic similarity network, coloured by AWaRe, labelled
+    # (a) Full antibiotic similarity network, coloured by AWaRe
     ncol = [colA.get(AWARE.get(n, 2), "#cccccc") for n in G.nodes()]
-    nx.draw_networkx_edges(G, posl, ax=ax[0], alpha=0.15, width=1)
-    nx.draw_networkx_nodes(G, posl, ax=ax[0], node_color=ncol,
-        node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()], edgecolors="k", linewidths=0.4)
-    nx.draw_networkx_labels(G, posl, ax=ax[0], font_size=5.2)
-    ax[0].set_title("(a) Antibiotic similarity network (colored by AWaRe)"); ax[0].axis("off")
-    ax[0].legend(handles=[Line2D([0], [0], marker='o', color='w', markerfacecolor=colA[l], markersize=9, label=n)
-        for l, n in [(1, "Access"), (2, "Watch"), (3, "Reserve")]], loc="lower right", frameon=False, fontsize=9)
-    # (b,c,d) drugs Klebsiella pneumoniae comparatively defeats, cumulative across three years
-    tags = ["(b)", "(c)", "(d)"]; acc = None
+    nx.draw_networkx_edges(
+        G, posl, ax=ax[0],
+        alpha=0.15,
+        width=1
+    )
+    nx.draw_networkx_nodes(
+        G, posl, ax=ax[0],
+        node_color=ncol,
+        node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()],
+        edgecolors="k",
+        linewidths=0.4
+    )
+    nx.draw_networkx_labels(
+        G, posl, ax=ax[0],
+        font_size=5.2
+    )
+    ax[0].set_title(
+        "(a) Antibiotic similarity network (colored by AWaRe)"
+    )
+    ax[0].axis("off")
+    ax[0].legend(
+        handles=[
+            Line2D(
+                [0], [0],
+                marker="o",
+                color="w",
+                markerfacecolor=colA[l],
+                markersize=9,
+                label=n
+            )
+            for l, n in [
+                (1, "Access"),
+                (2, "Watch"),
+                (3, "Reserve")
+            ]
+        ],
+        loc="lower right",
+        frameon=False,
+        fontsize=9
+    )
+    # (b,c,d) Antibiotics comparatively defeated by K. pneumoniae
+    tags = ["(b)", "(c)", "(d)"]
+    acc = None
+    prev_lit = set()
     for k, y in enumerate(SNAP):
-        st = (rca_val(win(2004, y)) >= 1).reindex(index=M.index, columns=M.columns).fillna(False)
+        st = (
+            (rca_val(win(2004, y)) >= 1)
+            .reindex(index=M.index, columns=M.columns)
+            .fillna(False)
+        )
+        # Cumulative links up to the current snapshot
         acc = st if acc is None else (acc | st)
-        lit = set(a for a in G.nodes() if PATH in acc.index and a in acc.columns and acc.loc[PATH, a])
+        lit = {
+            a for a in G.nodes()
+            if PATH in acc.index
+            and a in acc.columns
+            and acc.loc[PATH, a]
+        }
+        old_lit = lit & prev_lit
+        new_lit = lit - prev_lit
         axx = ax[k + 1]
-        nx.draw_networkx_edges(G, posl, ax=axx, alpha=0.12, width=0.8)
-        cols = ["#c9184a" if n in lit else "#e6e6e6" for n in G.nodes()]
-        nx.draw_networkx_nodes(G, posl, ax=axx, node_color=cols,
-            node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()], edgecolors="gray", linewidths=0.3)
-        axx.set_title(f"{tags[k]} K. pneumoniae — {y}   ({len(lit)} drugs defeated)", fontsize=11, color="#c9184a")
+        nx.draw_networkx_edges(
+            G, posl, ax=axx,
+            alpha=0.12,
+            width=0.8
+        )
+        if k == 0:
+            # First snapshot: all active nodes are light blue
+            cols = [
+                pal_blue[3] if n in lit
+                else "#e6e6e6"
+                for n in G.nodes()
+            ]
+        else:
+            # Later snapshots:
+            # previous nodes light blue, newly added nodes dark blue
+            cols = [
+                pal_blue[0] if n in new_lit
+                else pal_blue[3] if n in old_lit
+                else "#e6e6e6"
+                for n in G.nodes()
+            ]
+        nx.draw_networkx_nodes(
+            G, posl, ax=axx,
+            node_color=cols,
+            node_size=[45 + 380 * (deg[n] / mxd) for n in G.nodes()],
+            edgecolors="gray",
+            linewidths=0.3
+        )
+        axx.set_title(
+            f"{tags[k]} Antibiotics defeated by K. pneumoniae\n"
+            f"Year {y} — {len(lit)} total, {len(new_lit)} new",
+            fontsize=11,
+            color=pal_blue[0]
+        )
         axx.axis("off")
-    fig.tight_layout(); fig.savefig(f"{FIG}/fig5_spreading.pdf")
-    fig.savefig(f"{FIG}/fig5_spreading.png", dpi=170); plt.close(fig)
+        prev_lit = lit.copy()
+    fig.tight_layout()
+    fig.savefig(f"{FIG}/fig5_spreading.pdf")
+    fig.savefig(f"{FIG}/fig5_spreading.png", dpi=170)
+    plt.close(fig)
 
     # ---- FIGURE 5: prospective forecasting --------------------------------------
     te = C.copy()
     hb10 = hub.reset_index().sort_values("AUC", ascending=False).head(10)
-    fig, ax = plt.subplots(1, 4, figsize=(22, 5.2))
+    fig, ax = plt.subplots(1, 3, figsize=(22, 5.2))
     # (a) acquisition probability vs network exposure
     t = te.copy(); t["b"] = pd.qcut(t["rho_abx"].rank(method="first"), 6, labels=False)
     g = t.groupby("b").agg(x=("rho_abx", "mean"), p=("label", "mean"))
-    ax[0].plot(g.x, g.p, "o-", color="#c9184a", label="antibiotic-net", lw=2, ms=7)
+    ax[0].plot(g.x, g.p, "o-", color="#9ECDB9", label="antibiotic-net", lw=2, ms=7)
     ax[0].axhline(te.label.mean(), ls="--", color="gray", label="base rate")
     ax[0].set_xlabel(r"co-resistance exposure $\rho$"); ax[0].set_ylabel("P(acquire resistance)")
     ax[0].set_title("(a) Acquisition vs co-resistance exposure"); ax[0].legend(frameon=False)
@@ -441,7 +524,7 @@ def stage_figures(S, C, hub):
     def roc(y, s):
         o = np.argsort(-s); y = np.asarray(y)[o]; tpr = np.cumsum(y) / y.sum(); fpr = np.cumsum(1 - y) / (len(y) - y.sum())
         return np.r_[0, fpr], np.r_[0, tpr]
-    for col, c, lab in [("rho_abx", "#c9184a", "antibiotic-net"), ("rca_now", "#7209b7", "RCA proximity"),
+    for col, c, lab in [("rho_abx", "#9ECDB9", "antibiotic-net"), ("rca_now", "#7209b7", "RCA proximity"),
                         ("prev", "#adb5bd", "prevalence")]:
         f, t = roc(te.label.values, te[col].values); ax[1].plot(f, t, color=c, lw=2, label=f"{lab} (AUC={auc(te.label, te[col]):.2f})")
     ax[1].plot([0, 1], [0, 1], ls="--", color="k", alpha=0.5)
@@ -455,10 +538,10 @@ def stage_figures(S, C, hub):
     for lbl in ax[2].get_yticklabels(): lbl.set_fontsize(8.5)
     # (d) network exposure carries signal orthogonal to mere RCA proximity
     m0 = te.label == 0; m1 = te.label == 1
-    ax[3].scatter(te.rca_now[m0], te.rho_abx[m0], s=10, c="#cbcbcb", alpha=0.5, edgecolors="none", label="no acquisition")
-    ax[3].scatter(te.rca_now[m1], te.rho_abx[m1], s=24, c="#c9184a", alpha=0.85, edgecolors="k", linewidths=0.3, label="acquired next year")
-    ax[3].set_xlabel(r"current RCA proximity  $\mathrm{RCA}_{pa}(t)$"); ax[3].set_ylabel(r"network exposure  $\rho^A_{pa}$")
-    ax[3].set_title("(d) Exposure adds signal beyond RCA proximity"); ax[3].legend(frameon=False, loc="upper left", fontsize=9)
+    # ax[3].scatter(te.rca_now[m0], te.rho_abx[m0], s=10, c="#cbcbcb", alpha=0.5, edgecolors="none", label="no acquisition")
+    # ax[3].scatter(te.rca_now[m1], te.rho_abx[m1], s=24, c="#9ECDB9", alpha=0.85, edgecolors="k", linewidths=0.3, label="acquired next year")
+    # ax[3].set_xlabel(r"current RCA proximity  $\mathrm{RCA}_{pa}(t)$"); ax[3].set_ylabel(r"network exposure  $\rho^A_{pa}$")
+    # ax[3].set_title("(d) Exposure adds signal beyond RCA proximity"); ax[3].legend(frameon=False, loc="upper left", fontsize=9)
     fig.tight_layout(); fig.savefig(f"{FIG}/fig4_prediction.pdf"); fig.savefig(f"{FIG}/fig4_prediction.png", dpi=200); plt.close(fig)
 
 # ================================================================ main
